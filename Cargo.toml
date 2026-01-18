@@ -3,6 +3,8 @@ name = "rcsync"
 version = "0.1.0"
 authors = ["Bastien Sevajol <bastien.sevajol@biologic.net>"]
 edition = "2018"
+description = "Build receiver tracking new file data in given dir"
+license = "MIT"
 
 [features]
 serde = ["dep:serde"]
