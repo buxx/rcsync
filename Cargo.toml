@@ -1,6 +1,6 @@
 [package]
 name = "rcsync"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Bastien Sevajol <bastien.sevajol@biologic.net>"]
 edition = "2018"
 description = "Build receiver tracking new file data in given dir"
@@ -14,7 +14,7 @@ thiserror = "2"
 serde = { version = "1", optional = true }
 notify = "8.2"
 rustc-hash = "2.1"
-tracing = "0.1.44"
+tracing = "0.1"
 
 [dev-dependencies]
 tempdir = "0.3"
