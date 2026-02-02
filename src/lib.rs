@@ -2,8 +2,13 @@ use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
     path::PathBuf,
-    sync::mpsc::{channel, Receiver},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{channel, Receiver, RecvTimeoutError},
+        Arc,
+    },
     thread,
+    time::Duration,
 };
 
 use notify::Watcher as _;
@@ -15,11 +20,21 @@ use thiserror::Error;
 pub struct Watcher {
     path: PathBuf,
     size: usize,
+    stop: Arc<AtomicBool>,
 }
 
 impl Watcher {
     pub fn new(path: PathBuf, size: usize) -> Self {
-        Self { path, size }
+        Self {
+            path,
+            size,
+            stop: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn stop_signal(mut self, value: Arc<AtomicBool>) -> Self {
+        self.stop = value;
+        self
     }
 
     pub fn watch(&self) -> Result<Receiver<Event>, Error> {
@@ -33,25 +48,42 @@ impl Watcher {
         watcher.watch(&base, notify::RecursiveMode::Recursive)?;
 
         let path = self.path.clone();
+        let stop = self.stop.clone();
         thread::spawn(move || {
             let mut cursors = FxHashMap::default();
             let _watcher = watcher; // Move watcher to live in this scope
 
-            while let Ok(event) = irx.recv() {
-                tracing::debug!("Watch on {event:?}");
-                match event {
+            loop {
+                match irx.recv_timeout(Duration::from_millis(100)) {
                     Ok(event) => {
-                        if let Err(error) = process(&etx, &base, chunk_size, &mut cursors, event) {
-                            tracing::debug!(
-                                "Error while process watching {}: {}",
-                                path.display(),
-                                error
-                            );
-                        };
+                        tracing::debug!("Watch on {event:?}");
+                        match event {
+                            Ok(event) => {
+                                if let Err(error) =
+                                    process(&etx, &base, chunk_size, &mut cursors, event)
+                                {
+                                    tracing::debug!(
+                                        "Error while process watching {}: {}",
+                                        path.display(),
+                                        error
+                                    );
+                                };
+                            }
+                            Err(error) => {
+                                tracing::debug!(
+                                    "Error while watching {}: {}",
+                                    path.display(),
+                                    error
+                                );
+                            }
+                        }
                     }
-                    Err(error) => {
-                        tracing::debug!("Error while watching {}: {}", path.display(), error);
+                    Err(RecvTimeoutError::Timeout) => {
+                        if stop.load(Ordering::Relaxed) {
+                            break;
+                        }
                     }
+                    Err(RecvTimeoutError::Disconnected) => break,
                 }
             }
         });
