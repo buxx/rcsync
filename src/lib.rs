@@ -43,6 +43,8 @@ impl Watcher {
         let (etx, erx) = channel();
 
         let base = self.path.clone();
+        let base = std::fs::canonicalize(&base)
+            .map_err(|e| Error::Unexpected(format!("Canonicalize path {}: {e}", base.display())))?;
         let chunk_size = self.size;
         let mut watcher = notify::recommended_watcher(itx)?;
         watcher.watch(&base, notify::RecursiveMode::Recursive)?;
@@ -158,6 +160,8 @@ pub enum Event {
 pub enum Error {
     #[error("Watch error: {0}")]
     Watch(#[from] notify::Error),
+    #[error("Unexpected error: {0}")]
+    Unexpected(String),
 }
 
 #[cfg(test)]
