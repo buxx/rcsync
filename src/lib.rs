@@ -116,7 +116,17 @@ fn process(
                     file.read_exact(&mut buffer)?;
 
                     let buffer = buffer.to_vec();
-                    let relative_path = path.strip_prefix(base)?.to_path_buf();
+                    let relative_path = path
+                        .strip_prefix(base)
+                        .map_err(|e| {
+                            format!(
+                                "Strip prefix '{}' from '{}': {}",
+                                base.display(),
+                                path.display(),
+                                e
+                            )
+                        })?
+                        .to_path_buf();
                     for chunk in buffer.chunks(chunk_size) {
                         let bytes = chunk.to_vec();
                         let event = Event::Append(relative_path.clone(), bytes);
